@@ -147,6 +147,17 @@ class PoseYOLOv5s(nn.Module):
         self.heads = heads
         super(PoseYOLOv5s, self).__init__()
         self.backbone = Model(config_file)
+        
+        if isinstance(config_file, dict):
+            self.yaml = config_file  # model dict
+        else:  # is *.yaml
+            import yaml  # for torch hub
+            self.yaml_file = Path(config_file).name
+            with open(config_file) as f:
+                self.yaml = yaml.safe_load(f)  # model dict
+
+        self.tuple_output = self.yaml.get('tuple_output', False)
+        
         for head in sorted(self.heads):
             num_output = self.heads[head]
             fc = nn.Sequential(
@@ -161,10 +172,13 @@ class PoseYOLOv5s(nn.Module):
 
     def forward(self, x):
         x = self.backbone(x)
-        ret = {}
-        for head in self.heads:
-            ret[head] = self.__getattr__(head)(x)
-        return [ret]
+        dict_ret = {}
+        list_ret = []
+        for head in sorted(self.heads):
+            out = self.__getattr__(head)(x)
+            dict_ret[head] = out
+            list_ret.append(out)
+        return dict_ret if not self.tuple_output else tuple(list_ret)
 
 
 def get_pose_net(num_layers, heads, head_conv):
